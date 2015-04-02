@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="UTF-8" />
+	<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+	<title>Where's the fucking train?</title>
+	<link rel="stylesheet" type="text/css" href="/dash.css" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<meta name="apple-mobile-web-app-capable" content="yes">
+</head>
+<body>
+	<div id="trains">
+		<div id="last-updated-container">Updated <time id="last-updated">never</time></div>
+		<div class="error" id="status"></div>
+		<div class="error" id="error-buttons">
+			<span class="button" id="try-again" onclick="window.location.reload()">Try again</span>
+		</div>
+		<div id="live-stations"></div>
+	</div>
+
+	<div id="clock"></div>
+
+	<div id="forecast-container"></div>
+	<div class="footer">
+		&copy; 2015 <a href="http://www.jonthornton.com">Jon Thornton</a> &hearts; NYC
+	</div>
+
+
+	<script src="settings.js"></script>
+	<script src="//ajax.googleapis.com/ajax/libs/jquery/2.1.1/jquery.min.js"></script>
+	<script src="//cdnjs.cloudflare.com/ajax/libs/handlebars.js/1.3.0/handlebars.min.js"></script>
+	<script src="//cdnjs.cloudflare.com/ajax/libs/moment.js/2.9.0/moment.min.js"></script>
+
+
+	<script id="station-template" type="text/x-handlebars-template">
+		<div class="station" data-station-id="{{id}}">
+			<h2>{{name}}
+				{{#each routes}}
+				<span class="mta-bullet line-{{this}}">{{this}}</span>
+				{{/each}}
+			</h2>
+			{{#if hasData}}
+				<div class="uptown">
+					{{#each N}}
+						<div class="train">
+							<span class="direction-icon">&#9650;</span>
+							<time datetime="{{time}}"></time>
+						</div>
+					{{/each}}
+				</div>
+				<div class="downtown">
+					{{#each S}}
+						<div class="train">
+							<span class="direction-icon">&#9660;</span>
+							<time datetime="{{time}}"></time>
+						</div>
+					{{/each}}
+				</div>
+				<div class="clearfix"></div>
+			{{else}}
+				<div class="no-data">No data available</div>
+			{{/if}}
+		</div>
+	</script>
+	<script id="forecast-template" type="text/x-handlebars-template">
+		<div id="forecast-title"></div>
+		<div id="forecast-temperature"></div>
+	</script>
+
+	<script>
+	(function(){
+		var clockContainer = $('#clock');
+		function clockTick() {
+			clockContainer.text(moment().format('h:mma'));
+		}
+
+		clockTick();
+		setInterval(clockTick, 10000);
+	})();
+
+
+	(function(){
+		var stationSource = $("#station-template").html();
+		var stationTemplate = Handlebars.compile(stationSource);
+
+		var refreshTimer, ajaxHandle;
+
+		loadTrainData();
+		setInterval(refreshRelativeTimes, 10000);
+
+		function ajaxErrorHandler(resp)
+		{
+			// resp.status always seems to be 0...
+			switch(resp.status) {
+				case 500:
+				case 0:
+					$('#status').text('There was a problem communicating with the server.');
+					$('.error').show();
+			}
+
+			clearTimeout(refreshTimer);
+		}
+
+		function loadTrainData()
+		{
+			var endpoint = TRAIN_API_URL+'/by-id/'+TRAIN_STATIONS.join(',');
+
+			ajaxHandle = $.getJSON(endpoint)
+				.done(function(resp){
+					hydrateStations(resp.data, resp.updated);
+				})
+				.fail(ajaxErrorHandler);
+
+			refreshTimer = setTimeout(function(){
+				loadTrainData();
+			}, TRAIN_REFRESH_INTERVAL);
+		}
+
+		function hydrateStations(data, updated)
+		{
+			if (new Date().getTime() - new Date(updated).getTime() > 300000) {
+				// stale data from MTA feed
+				$('#status').text('The MTA isn\'t providing accurate train data right now :(');
+				$('#status').show();
+			} else {
+				$('.error').hide();
+			}
+
+			$('#last-updated').attr('datetime', updated);
+
+			$('#live-stations .station').remove();
+			var container = $('#live-stations');
+
+			for (var i in data) {
+				data[i].routes.sort();
+				$.map(data[i].routes, function(route_id) {
+					return route_id.charAt(0);
+				});
+				data[i].routes = arrayUnique(data[i].routes);
+
+				var html = stationTemplate(data[i]);
+				container.append(html);
+			}
+
+			refreshRelativeTimes();
+		}
+
+		function arrayUnique(a) {
+		    return a.reduce(function(p, c) {
+		        if (p.indexOf(c) < 0) p.push(c);
+		        return p;
+		    }, []);
+		};
+
+		function refreshRelativeTimes() {
+			var now = Date.now()
+			$('time[datetime]').each(function(){
+				$this = $(this);
+				var trainTime = new Date($this.attr('datetime'));
+				var minutesDiff = Math.ceil((trainTime.getTime() - now) / 60000);
+
+				if (minutesDiff == 0) {
+					$this.text('Now');
+				} else if (minutesDiff < 0) {
+					$this.text(Math.abs(minutesDiff) + ' min ago');
+				} else {
+					$this.text(minutesDiff + ' min');
+				}
+			});
+		}
+	})();
+	</script>
+
+</body>
+</html>

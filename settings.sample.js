@@ -1,0 +1,3 @@
+var TRAIN_API_URL = 'http://localhost:5000';
+var TRAIN_REFRESH_INTERVAL = 60000;
+var TRAIN_STATIONS = [310];
