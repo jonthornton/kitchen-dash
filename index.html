@@ -5,12 +5,12 @@
 	<meta http-equiv="X-UA-Compatible" content="IE=edge" />
 	<title>Where's the fucking train?</title>
 	<link rel="stylesheet" type="text/css" href="/dash.css" />
+	<link rel="stylesheet" type="text/css" href="/weather-icons.min.css" />
 	<meta name="viewport" content="width=device-width, initial-scale=1" />
 	<meta name="apple-mobile-web-app-capable" content="yes">
 </head>
 <body>
 	<div id="trains">
-		<div id="last-updated-container">Updated <time id="last-updated">never</time></div>
 		<div class="error" id="status"></div>
 		<div class="error" id="error-buttons">
 			<span class="button" id="try-again" onclick="window.location.reload()">Try again</span>
@@ -20,7 +20,15 @@
 
 	<div id="clock"></div>
 
-	<div id="forecast-container"></div>
+	<div id="weather-container">
+		<div id="weather-temp">
+			<i id="weather-temp-icon" class="wi wi-umbrella"></i>
+			<span id="weather-temp-text"></span>&deg;
+		</div>
+		<div id="weather-1hour-summary"></div>
+
+	</div>
+
 	<div class="footer">
 		&copy; 2015 <a href="http://www.jonthornton.com">Jon Thornton</a> &hearts; NYC
 	</div>
@@ -62,10 +70,6 @@
 			{{/if}}
 		</div>
 	</script>
-	<script id="forecast-template" type="text/x-handlebars-template">
-		<div id="forecast-title"></div>
-		<div id="forecast-temperature"></div>
-	</script>
 
 	<script>
 	(function(){
@@ -78,6 +82,58 @@
 		setInterval(clockTick, 10000);
 	})();
 
+	(function() {
+		ICONS_MAP = {
+			'clear-day': 'wi-sunny',
+			'clear-night': 'wi-night-clear',
+			'rain': 'wi-rain',
+			'snow': 'wi-snow',
+			'sleet': 'wi-sleet',
+			'wind': 'wi-strong-wind',
+			'fog': 'wi-fog',
+			'cloudy': 'wi-cloudy',
+			'partly-cloudy-day': 'wi-day-cloudy',
+			'partly-cloudy-night': 'wi-night-alt-cloudy',
+		};
+		var refreshTimer, ajaxHandle;
+
+		function ajaxErrorHandler(resp)
+		{
+			// resp.status always seems to be 0...
+			switch(resp.status) {
+				case 500:
+				case 0:
+					$('#status').text('There was a problem communicating with the server.');
+					$('.error').show();
+			}
+
+			clearTimeout(refreshTimer);
+		}
+
+		loadData();
+		function loadData()
+		{
+			var endpoint = WEATHER_API_URL+'/'+WEATHER_COORDS.join(',');
+
+			ajaxHandle = $.getJSON(endpoint)
+				.done(function(resp){
+					hydrateWeather(resp);
+				})
+				.fail(ajaxErrorHandler);
+
+			refreshTimer = setTimeout(function(){
+				loadData();
+			}, WEATHER_REFRESH_INTERVAL);
+		}
+
+		function hydrateWeather(data)
+		{
+			console.log(ICONS_MAP[data.hourly.icon]);
+			$('#weather-temp-text').text(data.currently.temperature.toFixed(0));
+			$('#weather-temp-icon').removeClass().addClass('wi '+ ICONS_MAP[data.hourly.icon]);
+			$('#weather-1hour-summary').text(data.hourly.summary)
+		}
+	})();
 
 	(function(){
 		var stationSource = $("#station-template").html();
